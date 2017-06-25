@@ -7,6 +7,20 @@ C = terralib.includecstring([[
 ]])
 
 
+struct VECDATA {
+  gradE_d : &float,
+  uk_d : &float,
+  ukp1_d : &float,
+  input_d : &float,
+  input_h : &float,
+  output_h : &float,
+  tau : float,
+  lam : float,
+  w : int,
+  h : int
+  numpixels : int
+}
+backend.VECDATA = VECDATA
 
 
 struct Index { 
@@ -23,18 +37,21 @@ end
 backend.Index = Index
 
 
-terra allocation(input_d : &&float, gradE_d : &&float, ukp1_d : &&float, uk_d : &&float, numpixels : int)
-  @input_d = [&float](C.malloc(numpixels * sizeof(float)))
-  @gradE_d = [&float](C.malloc(numpixels * sizeof(float)))
-  @ukp1_d = [&float](C.malloc(numpixels * sizeof(float)))
-  @uk_d = [&float](C.malloc(numpixels * sizeof(float)))
+terra allocation(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+
+  (@problemData).input_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).gradE_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).ukp1_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).uk_d = [&float](C.malloc(numpixels * sizeof(float)))
 end
 backend.allocation = allocation
 
 
-terra initialization(input_d : &&float, input_h : &&float, uk_d : &&float, output_h : &&float, numpixels : int)
-  C.memcpy(@input_d, @input_h, numpixels * sizeof(float))
-  C.memcpy(@uk_d, @output_h, numpixels * sizeof(float))
+terra initialization(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.memcpy((@problemData).input_d, (@problemData).input_h, numpixels * sizeof(float))
+  C.memcpy((@problemData).uk_d, (@problemData).output_h, numpixels * sizeof(float))
 end
 backend.initialization = initialization
 
@@ -44,20 +61,21 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch : bool, gradE_d : &&float, lam : float, uk_d : &&float, input_d : &&float, kernel : {&float, float, &float, &float} -> {})
-  kernel(@gradE_d, lam, @uk_d, @input_d)
+terra launchKernelGrad(launch: bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
+  kernel((@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : bool, ukp1_d : &&float, tau : float, uk_d : &&float, gradE_d : &&float, kernel : {&float, float, &float, &float} -> {})
-  kernel(@ukp1_d, tau, @uk_d, @gradE_d)
+terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
+  kernel((@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 
 
-terra retrieval(output_h : &&float, uk_d : &&float, numpixels : int)
-  C.memcpy(@output_h, @uk_d, numpixels * sizeof(float))
+terra retrieval(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.memcpy((@problemData).output_h, (@problemData).uk_d, numpixels * sizeof(float))
 end
 backend.retrieval = retrieval
 

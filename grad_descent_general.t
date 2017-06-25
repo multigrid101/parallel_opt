@@ -52,42 +52,41 @@ local kernels = backend.makeKernelList({evalGrad, evalUkp1})
 
 
 terra main()
-  var numpixels : int = width*height
+  var problemData : backend.VECDATA
 
-  var lam : float = 0.0f -- penalty for graddient of image
-  var tau : float = 0.1f -- stepsize
+  var numpixels : int = width*height
+  problemData.numpixels = numpixels
+  problemData.w = width
+  problemData.h = height
+
+
+  problemData.lam = 1.0f
+  problemData.tau = 0.1f
 
   -- START load_input (bleibt immer gleich???)
   -- allocate space for input picture on host and device
-  var input_h : &float
-  input_h = [&float](C.malloc(numpixels * sizeof(float)))
+  problemData.input_h = [&float](C.malloc(numpixels * sizeof(float)))
+  problemData.output_h = [&float](C.malloc(numpixels * sizeof(float)))
 
-  var output_h : &float 
-  output_h = [&float](C.malloc(numpixels * sizeof(float)))
 
   -- initialize input picture and u0 and copy to device.
   -- at least the  initialization does not depend on the backend
   for y = 0, height do
     for x = 0, width do
       var center : int = y*width + x
-      input_h[center] = 0.5f
-      output_h[center] = ([float](C.rand()) / [float](C.RAND_MAX))
+      problemData.input_h[center] = 0.5f
+      problemData.output_h[center] = ([float](C.rand()) / [float](C.RAND_MAX))
     end
   end
   -- END load_input
 
   -- START allocation
-  var input_d : &float
-  var gradE_d : &float
-  var ukp1_d : &float
-  var uk_d : &float
-
-  backend.allocation(&input_d, &gradE_d, &ukp1_d, &uk_d, numpixels)
+  backend.allocation(&problemData)
   -- END allocation
 
 
   -- START initialization
-  backend.initialization(&input_d, &input_h, &uk_d, &output_h, numpixels)
+  backend.initialization(&problemData)
   -- END initialization
 
 
@@ -98,7 +97,7 @@ terra main()
 
 
   for k = 0,10 do
-    C.printf("before: %f\n", output_h[k+width])
+    C.printf("before: %f\n", problemData.output_h[k+width])
   end
 
   -- main loop
@@ -107,31 +106,32 @@ terra main()
   for iter = 1,maxiter do
 
     -- START launch
-    backend.launchKernelGrad(theLaunchParams, &gradE_d, lam, &uk_d, &input_d, kernels.kernelGrad)
-    backend.launchKernelUkp1(theLaunchParams, &ukp1_d, tau, &uk_d, &gradE_d, kernels.kernelUkp1)
+    backend.launchKernelGrad(theLaunchParams, &problemData, kernels.kernelGrad)
+    backend.launchKernelUkp1(theLaunchParams, &problemData, kernels.kernelUkp1)
     -- END launch
 
     -- C.printf("\n")
     -- for k = 0,10 do
-    --   C.printf("grad: %f\n", gradE[k+width])
+    --   C.printf("grad: %f\n", problemData.gradE_d[k+width])
     -- end
 
-    var tmp : &float = uk_d
-    uk_d = ukp1_d
-    ukp1_d = tmp
+    var tmp : &float = problemData.uk_d
+    problemData.uk_d = problemData.ukp1_d
+    problemData.ukp1_d = tmp
   end
 
   -- copy result back to host
   -- let's put this in a post-optimization block, which would be empty for e.g. the serial backend
   -- START retrieval
-  backend.retrieval(&output_h, &uk_d, numpixels)
+  backend.retrieval(&problemData)
   -- END retrieval
 
   -- write result to file TODO
   -- this block will not depends on the backend, but let's abstract it just in cse
   -- future backends have e.g. a different file I/O API
   for k = 0,10 do
-    C.printf("after: %f\n", output_h[k+width])
+    C.printf("after: %f\n", problemData.output_h[k+width])
+    -- C.printf("after: %f\n", problemData.uk_d[k+width])
   end
   
 end

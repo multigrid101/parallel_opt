@@ -40,20 +40,36 @@ backend.initialization = initialization
 
 struct VECDATA {
   gradE_d : &float,
-  lam : int,
   uk_d : &float,
+  ukp1_d : &float,
   input_d : &float,
+  tau : int,
+  lam : int,
   tid : int,
   total_length : int
 }
 terra launchPreparation(width : int, height : int, input_d : &float, gradE_d : &float, ukp1_d : &float, uk_d : &float, lam : float)
-  
-  return {data_t1, data_t2}
+  return true
 end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch : &opaque, gradE_d : &&float, lam : float, uk_d : &&float, input_d : &&float, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
+function(kernel)
+  terra doitGrad(arg : &opaque)
+    var thedata = @([&VECDATA](arg))
+
+    var gradE_d = thedata.gradE_d
+    var lam = thedata.lam
+    var uk_d = thedata.uk_d
+    var input_d = thedata.input_d
+    var tid = thedata.tid
+    var total_length = thedata.total_length
+
+    kernel(a,b,c,d)
+  end
+  return doitGrad
+end
+terra launchKernelGrad(launch : &opaque, gradE_d : &&float, lam : float, uk_d : &&float, input_d : &&float, kernel : {&float, float, &float, &float} -> uint32)
   var data_t1 : VECDATA
   var data_t2 : VECDATA
 
@@ -77,8 +93,8 @@ terra launchKernelGrad(launch : &opaque, gradE_d : &&float, lam : float, uk_d : 
   var data_t1 = launch[0]
   var data_t2 = launch[1]
 
-  C.pthread_create(&t1, nil, kernel, &data_t1)
-  C.pthread_create(&t2, nil, kernel, &data_t2)
+  C.pthread_create(&t1, nil, doitGrad(kernel), &data_t1)
+  C.pthread_create(&t2, nil, doitGrad(kernel), &data_t2)
 end
 backend.launchKernelGrad = launchKernelGrad
 
