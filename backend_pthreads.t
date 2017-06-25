@@ -1,41 +1,11 @@
 backend = {}
 
 C = terralib.includecstring([[
-#include <pthreads.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 ]])
-
-
-
-struct Index { 
-               x : int,
-               y : int 
-             }
-terra Index:initAndTestIfValid(width : int, height : int)
-  self.x = blockIdx_x()*blockDim_x() + tid_x()
-  self.y = blockIdx_y()*blockDim_y() + tid_y()
-
-  var isvalid : bool = (self.x>=0) and (self.x<=width-1) and (self.y>=0) and (self.y<=height-1)
-  return isvalid
-end
-backend.Index = Index
-
-
-terra allocation(input_d : &&float, gradE_d : &&float, ukp1_d : &&float, uk_d : &&float, numpixels : int)
-  C.cudaMalloc([&&opaque](input_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](gradE_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](ukp1_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](uk_d), numpixels * sizeof(float))
-end
-backend.allocation = allocation
-
-
-terra initialization(input_d : &&float, input_h : &&float, uk_d : &&float, output_h : &&float, numpixels : int)
-  C.cudaMemcpy(@input_d, @input_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
-  C.cudaMemcpy(@uk_d, @output_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
-end
-backend.initialization = initialization
 
 
 struct VECDATA {
@@ -43,78 +13,132 @@ struct VECDATA {
   uk_d : &float,
   ukp1_d : &float,
   input_d : &float,
-  tau : int,
-  lam : int,
-  tid : int,
-  total_length : int
+  input_h : &float,
+  output_h : &float,
+  tau : float,
+  lam : float,
+  w : int,
+  h : int
+  numpixels : int,
+  tid : int
 }
-terra launchPreparation(width : int, height : int, input_d : &float, gradE_d : &float, ukp1_d : &float, uk_d : &float, lam : float)
+backend.VECDATA = VECDATA
+
+
+struct Index { 
+               x : int,
+               y : int 
+             }
+terra Index:initAndTestIfValid(width : int, height : int, x: int, y: int)
+  self.x = x
+  self.y = y
+
+  var isvalid : bool = (self.x>=0) and (self.x<=width-1) and (self.y>=0) and (self.y<=height-1)
+  return isvalid
+end
+backend.Index = Index
+
+
+terra allocation(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+
+  (@problemData).input_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).gradE_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).ukp1_d = [&float](C.malloc(numpixels * sizeof(float)))
+  (@problemData).uk_d = [&float](C.malloc(numpixels * sizeof(float)))
+end
+backend.allocation = allocation
+
+
+terra initialization(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.memcpy((@problemData).input_d, (@problemData).input_h, numpixels * sizeof(float))
+  C.memcpy((@problemData).uk_d, (@problemData).output_h, numpixels * sizeof(float))
+end
+backend.initialization = initialization
+
+
+terra launchPreparation(width : int, height : int)
   return true
 end
 backend.launchPreparation = launchPreparation
 
 
-function(kernel)
-  terra doitGrad(arg : &opaque)
-    var thedata = @([&VECDATA](arg))
-
-    var gradE_d = thedata.gradE_d
-    var lam = thedata.lam
-    var uk_d = thedata.uk_d
-    var input_d = thedata.input_d
-    var tid = thedata.tid
-    var total_length = thedata.total_length
-
-    kernel(a,b,c,d)
-  end
-  return doitGrad
-end
-terra launchKernelGrad(launch : &opaque, gradE_d : &&float, lam : float, uk_d : &&float, input_d : &&float, kernel : {&float, float, &float, &float} -> uint32)
+terra launchKernelGrad(launch : bool, problemData : &backend.VECDATA, kernel : {&opaque} -> &opaque)
   var data_t1 : VECDATA
   var data_t2 : VECDATA
 
-  data_t1.gradE_d = gradE_d
-  data_t1.lam = lam
-  data_t1.uk_d = uk_d
-  data_t1.input_d = input_d
+  data_t1.gradE_d = (@problemData).gradE_d
+  data_t1.lam = (@problemData).lam
+  data_t1.uk_d = (@problemData).uk_d
+  data_t1.input_d = (@problemData).input_d
   data_t1.tid = 0
-  data_t1.total_length = width*height
+  data_t1.numpixels = width*height
 
-  data_t1.gradE_d = gradE_d
-  data_t1.lam = lam
-  data_t1.uk_d = uk_d
-  data_t1.input_d = input_d
-  data_t1.tid = 0
-  data_t1.total_length = width*height
+  data_t2.gradE_d = (@problemData).gradE_d
+  data_t2.lam = (@problemData).lam
+  data_t2.uk_d = (@problemData).uk_d
+  data_t2.input_d = (@problemData).input_d
+  data_t2.tid = 1
+  data_t2.numpixels = width*height
 
   var t1 : C.pthread_t
   var t2 : C.pthread_t
 
-  var data_t1 = launch[0]
-  var data_t2 = launch[1]
+  -- var data_t1 = [&VECDATA](launch)[0]
+  -- var data_t2 = [&VECDATA](launch)[1]
 
-  C.pthread_create(&t1, nil, doitGrad(kernel), &data_t1)
-  C.pthread_create(&t2, nil, doitGrad(kernel), &data_t2)
+  C.pthread_create(&t1, nil, kernel, &data_t1)
+  C.pthread_create(&t2, nil, kernel, &data_t2)
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : terralib.CUDAParams, ukp1_d : &&float, tau : float, uk_d : &&float, gradE_d : &&float, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, @ukp1_d, tau, @uk_d, @gradE_d)
+terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&opaque} -> &opaque)
+  var data_t1 : VECDATA
+  var data_t2 : VECDATA
+
+  data_t1.ukp1_d = (@problemData).ukp1_d
+  data_t1.tau = (@problemData).tau
+  data_t1.uk_d = (@problemData).uk_d
+  data_t1.gradE_d = (@problemData).gradE_d
+  data_t1.tid = 0
+  data_t1.numpixels = width*height
+
+  data_t2.ukp1_d = (@problemData).ukp1_d
+  data_t2.tau = (@problemData).tau
+  data_t2.uk_d = (@problemData).uk_d
+  data_t2.gradE_d = (@problemData).gradE_d
+  data_t2.tid = 1
+  data_t2.numpixels = width*height
+
+  var t1 : C.pthread_t
+  var t2 : C.pthread_t
+
+  -- var data_t1 = [&VECDATA](launch)[0]
+  -- var data_t2 = [&VECDATA](launch)[1]
+
+  C.pthread_create(&t1, nil, kernel, &data_t1)
+  C.pthread_create(&t2, nil, kernel, &data_t2)
+
+  C.pthread_join(t1, nil)
+  C.pthread_join(t2, nil)
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 
 
-terra retrieval(output_h : &&float, uk_d : &&float, numpixels : int)
-  C.cudaMemcpy(@output_h, @uk_d, numpixels * sizeof(float), C.cudaMemcpyDeviceToHost)
+terra retrieval(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.memcpy((@problemData).output_h, (@problemData).uk_d, numpixels * sizeof(float))
 end
 backend.retrieval = retrieval
 
 
+backend.tid_sym = symbol(int, "tid")
 function makeloop(func, args)
   return quote
     for y = 0,width do
-      for x = 0,height do
+      for x = [backend.tid_sym]*(height/2), [backend.tid_sym]*(height/2) + (height/2) do
         var idx : backend.Index
         if idx:initAndTestIfValid(width, height, x, y) then
             func(idx, args)
@@ -127,7 +151,34 @@ backend.makeloop = makeloop
 
 
 function makeKernelList(rawlist)
-  local kernels = terralib.cudacompile({kernelGrad = rawlist[1], kernelUkp1 = rawlist[2]})
+  local kernels = {}
+  local rawGrad = rawlist[1]
+  local rawUkp1 = rawlist[2]
+  kernels.kernelGrad = terra(arg : &opaque) : &opaque
+    var thedata = @([&backend.VECDATA](arg))
+
+    var grad = thedata.gradE_d
+    var lam = thedata.lam
+    var uk = thedata.uk_d
+    var input = thedata.input_d
+    var tid = thedata.tid
+
+    rawGrad(grad, lam, uk, input, tid)
+    return nil
+  end
+  kernels.kernelUkp1 = terra(arg : &opaque) : &opaque
+    var thedata = @([&backend.VECDATA](arg))
+
+    var ukp1 = thedata.ukp1_d
+    var tau = thedata.tau
+    var uk = thedata.uk_d
+    var grad = thedata.gradE_d
+    var tid = thedata.tid
+
+    evalUkp1(ukp1, tau, uk, grad, tid)
+    return nil
+  end
+
   return kernels
 end
 backend.makeKernelList = makeKernelList

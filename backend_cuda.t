@@ -1,4 +1,5 @@
 backend = {}
+backend.tid_sym = symbol(int, "dummy_not_required_for_this_backend")
 
 C = terralib.includecstring([[
 #include "cuda_runtime.h"
@@ -84,14 +85,14 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, (@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
+terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float, int} -> uint32)
+  kernel(&launch, (@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d, 0) -- '0' is just a dummy parameter that is only important for pthreads
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, (@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
+terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float, int} -> uint32)
+  kernel(&launch, (@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d, 0) -- '0' is just a dummy parameter that is only important for pthreads
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 

@@ -27,7 +27,8 @@ terra evalGradLocal(idx : backend.Index, grad : &float, lam : float, uk : &float
     grad[center] = (uk[center] - input[center]) - lam*((-4)*uk[center] + uk[top] + uk[bottom] + uk[left] + uk[right])
 end
 
-terra evalGrad(grad : &float, lam : float, uk : &float, input : &float)
+
+terra evalGrad(grad : &float, lam : float, uk : &float, input : &float, [backend.tid_sym]) -- tid is irrelevant for serial and cuda
   [backend.makeloop(evalGradLocal, {grad, lam, uk, input})]
 end
 
@@ -41,7 +42,7 @@ terra evalUkp1Local(idx : backend.Index, ukp1 : &float, tau : float, uk : &float
 end
 
 
-terra evalUkp1(ukp1 : &float, tau : float, uk : &float, grad : &float)
+terra evalUkp1(ukp1 : &float, tau : float, uk : &float, grad : &float, [backend.tid_sym])
   [backend.makeloop(evalUkp1Local, {ukp1, tau, uk, grad})]
 end
 
@@ -49,6 +50,7 @@ end
 -- spot where we wrap the serial serial kernel-code into a for-loop
 -- local kernels = terralib.cudacompile({kernelGrad = evalGrad, kernelUkp1 = evalUkp1})
 local kernels = backend.makeKernelList({evalGrad, evalUkp1})
+print(kernels.kernelGrad)
 
 
 terra main()
@@ -109,6 +111,9 @@ terra main()
     backend.launchKernelGrad(theLaunchParams, &problemData, kernels.kernelGrad)
     backend.launchKernelUkp1(theLaunchParams, &problemData, kernels.kernelUkp1)
     -- END launch
+
+    -- START synchronize
+    -- END synchronize
 
     -- C.printf("\n")
     -- for k = 0,10 do

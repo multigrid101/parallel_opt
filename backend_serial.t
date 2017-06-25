@@ -1,4 +1,5 @@
 backend = {}
+backend.tid_sym = symbol(int, "dummy_not_required_for_this_backend")
 
 C = terralib.includecstring([[
 #include <stdio.h>
@@ -61,14 +62,14 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch: bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
-  kernel((@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
+terra launchKernelGrad(launch: bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float, int} -> {})
+  kernel((@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d, 0) -- '0' is just a dummy parameter here
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
-  kernel((@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
+terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float, int} -> {})
+  kernel((@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d, 0) -- '0' is just a dummy parameter here
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 
