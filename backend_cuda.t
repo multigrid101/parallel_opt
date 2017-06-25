@@ -77,7 +77,8 @@ terra launchPreparation(width : int, height : int)
   var blockSize = 32
   var gridSizeX = width/blockSize
   var gridSizeY = height/blockSize
-  var launch = terralib.CUDAParams {gridSizeX,gridSizeY,1, blockSize,blockSize,1, 0, nil}
+  -- var launch = terralib.CUDAParams {gridSizeX,gridSizeY,1, blockSize,blockSize,1, 0, nil}
+  var launch = terralib.CUDAParams {20,10,1, 32,32,1, 0, nil}
 
   return launch
 end
@@ -88,6 +89,26 @@ terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECD
   kernel(&launch, problemData)
 end
 backend.launchKernelGrad = launchKernelGrad
+
+
+--- START TEST
+-- terra testKernel()
+--   var t = tid_x()
+--   C.vprintf("from simple kernel: %d\n", [&int8](&t))
+-- end
+-- compiledTestKernels = terralib.cudacompile({foo = testKernel})
+-- terra launchKernelTest(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &backend.VECDATA} -> uint32)
+--   kernel(&launch, problemData)
+-- end
+-- backend.launchKernelTest = launchKernelTest
+
+-- terra doit()
+--   var launch = terralib.CUDAParams {20,10,1, 32,32,1, 0, nil}
+--   compiledTestKernels.foo(&launch)
+--   C.sync()
+-- end
+-- doit()
+--- END TEST
 
 
 terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &backend.VECDATA} -> uint32)

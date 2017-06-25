@@ -33,6 +33,7 @@ terra evalGrad(problemData : &backend.VECDATA)
   var lam = (@problemData).lam
   var uk = (@problemData).uk_d
   var input = (@problemData).input_d
+  C.vprintf('asdfasdfasdfasdf\n', nil)
   [backend.makeloop(evalGradLocal, {grad, lam, uk, input})]
 end
 print(evalGrad)
@@ -55,6 +56,7 @@ terra evalUkp1(problemData : &backend.VECDATA)
   var tau = (@problemData).tau
   var uk = (@problemData).uk_d
   var grad = (@problemData).gradE_d
+  C.vprintf('asdfasdfasdfasdf\n', nil)
   [backend.makeloop(evalUkp1Local, {ukp1, tau, uk, grad})]
 end
 print(evalUkp1)
@@ -121,7 +123,11 @@ terra main()
 
     -- START launch
     backend.launchKernelGrad(theLaunchParams, &problemData, kernels.kernelGrad)
+    -- C.sync()
+    C.cudaDeviceSynchronize()
     backend.launchKernelUkp1(theLaunchParams, &problemData, kernels.kernelUkp1)
+    -- C.sync()
+    C.cudaDeviceSynchronize()
     -- END launch
 
     -- C.printf("\n")
