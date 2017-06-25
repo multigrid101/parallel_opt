@@ -1,5 +1,5 @@
--- backend = require('backend_cuda')
-backend = require('backend_serial')
+backend = require('backend_cuda')
+-- backend = require('backend_serial')
 
 height = 100
 width = 200

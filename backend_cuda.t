@@ -26,6 +26,21 @@ local blockIdx_x = cudalib.nvvm_read_ptx_sreg_ctaid_x
 local blockIdx_y = cudalib.nvvm_read_ptx_sreg_ctaid_y
 
 
+struct VECDATA {
+  gradE_d : &float,
+  uk_d : &float,
+  ukp1_d : &float,
+  input_d : &float,
+  input_h : &float,
+  output_h : &float,
+  tau : float,
+  lam : float,
+  w : int,
+  h : int
+  numpixels : int
+}
+backend.VECDATA = VECDATA
+
 
 struct Index { 
                x : int,
@@ -41,18 +56,20 @@ end
 backend.Index = Index
 
 
-terra allocation(input_d : &&float, gradE_d : &&float, ukp1_d : &&float, uk_d : &&float, numpixels : int)
-  C.cudaMalloc([&&opaque](input_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](gradE_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](ukp1_d), numpixels * sizeof(float))
-  C.cudaMalloc([&&opaque](uk_d), numpixels * sizeof(float))
+terra allocation(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.cudaMalloc([&&opaque](&((@problemData).input_d)), numpixels * sizeof(float))
+  C.cudaMalloc([&&opaque](&((@problemData).gradE_d)), numpixels * sizeof(float))
+  C.cudaMalloc([&&opaque](&((@problemData).ukp1_d)), numpixels * sizeof(float))
+  C.cudaMalloc([&&opaque](&((@problemData).uk_d)), numpixels * sizeof(float))
 end
 backend.allocation = allocation
 
 
-terra initialization(input_d : &&float, input_h : &&float, uk_d : &&float, output_h : &&float, numpixels : int)
-  C.cudaMemcpy(@input_d, @input_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
-  C.cudaMemcpy(@uk_d, @output_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
+terra initialization(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.cudaMemcpy((@problemData).input_d, (@problemData).input_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
+  C.cudaMemcpy((@problemData).uk_d, (@problemData).output_h, numpixels * sizeof(float), C.cudaMemcpyHostToDevice)
 end
 backend.initialization = initialization
 
@@ -67,20 +84,21 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch : terralib.CUDAParams, gradE_d : &&float, lam : float, uk_d : &&float, input_d : &&float, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, @gradE_d, lam, @uk_d, @input_d)
+terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
+  kernel(&launch, (@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : terralib.CUDAParams, ukp1_d : &&float, tau : float, uk_d : &&float, gradE_d : &&float, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, @ukp1_d, tau, @uk_d, @gradE_d)
+terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
+  kernel(&launch, (@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 
 
-terra retrieval(output_h : &&float, uk_d : &&float, numpixels : int)
-  C.cudaMemcpy(@output_h, @uk_d, numpixels * sizeof(float), C.cudaMemcpyDeviceToHost)
+terra retrieval(problemData : &backend.VECDATA)
+  var numpixels = (@problemData).numpixels
+  C.cudaMemcpy((@problemData).output_h, (@problemData).uk_d, numpixels * sizeof(float), C.cudaMemcpyDeviceToHost)
 end
 backend.retrieval = retrieval
 
