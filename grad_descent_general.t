@@ -1,8 +1,8 @@
-backend = require('backend_cuda')
--- backend = require('backend_serial')
+conf = require('grad_descent_config')
+height = conf.height
+width = conf.width
+backend = require(conf.backend)
 
-height = 100
-width = 200
 terra evalGradLocal(idx : backend.Index, grad : &float, lam : float, uk : &float, input : &float)
     var x = idx.x
     var y = idx.y
