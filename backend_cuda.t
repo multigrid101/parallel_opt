@@ -75,8 +75,8 @@ backend.initialization = initialization
 
 terra launchPreparation(width : int, height : int)
   var blockSize = 32
-  var gridSizeX = width/blockSize +1
-  var gridSizeY = height/blockSize +1
+  var gridSizeX = width/blockSize
+  var gridSizeY = height/blockSize
   var launch = terralib.CUDAParams {gridSizeX,gridSizeY,1, blockSize,blockSize,1, 0, nil}
 
   return launch
@@ -84,14 +84,14 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, (@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
+terra launchKernelGrad(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &backend.VECDATA} -> uint32)
+  kernel(&launch, problemData)
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &float, float, &float, &float} -> uint32)
-  kernel(&launch, (@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
+terra launchKernelUkp1(launch : terralib.CUDAParams, problemData : &backend.VECDATA, kernel : {&terralib.CUDAParams, &backend.VECDATA} -> uint32)
+  kernel(&launch, problemData)
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 

@@ -61,14 +61,14 @@ end
 backend.launchPreparation = launchPreparation
 
 
-terra launchKernelGrad(launch: bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
-  kernel((@problemData).gradE_d, (@problemData).lam, (@problemData).uk_d, (@problemData).input_d)
+terra launchKernelGrad(launch: bool, problemData : &backend.VECDATA, kernel : {&backend.VECDATA} -> {})
+  kernel(problemData)
 end
 backend.launchKernelGrad = launchKernelGrad
 
 
-terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&float, float, &float, &float} -> {})
-  kernel((@problemData).ukp1_d, (@problemData).tau, (@problemData).uk_d, (@problemData).gradE_d)
+terra launchKernelUkp1(launch : bool, problemData : &backend.VECDATA, kernel : {&backend.VECDATA} -> {})
+  kernel(problemData)
 end
 backend.launchKernelUkp1 = launchKernelUkp1
 

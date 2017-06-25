@@ -23,27 +23,41 @@ terra evalGradLocal(idx : backend.Index, grad : &float, lam : float, uk : &float
       if (x-1) < 0 then left = y*width + x end
       if (x+1) > width-1 then right = y*width + x end
     end
+      C.vprintf('%d\n', [&int8](x))
 
     grad[center] = (uk[center] - input[center]) - lam*((-4)*uk[center] + uk[top] + uk[bottom] + uk[left] + uk[right])
 end
 
-terra evalGrad(grad : &float, lam : float, uk : &float, input : &float)
+terra evalGrad(problemData : &backend.VECDATA)
+  var grad = (@problemData).gradE_d
+  var lam = (@problemData).lam
+  var uk = (@problemData).uk_d
+  var input = (@problemData).input_d
   [backend.makeloop(evalGradLocal, {grad, lam, uk, input})]
 end
+print(evalGrad)
 
 
 terra evalUkp1Local(idx : backend.Index, ukp1 : &float, tau : float, uk : &float, grad : &float)
       var x = idx.x
       var y = idx.y
 
+      C.vprintf('%d\n', [&int8](x))
       var center : int = y*width + x
       ukp1[center] = uk[center] - tau*grad[center]
+      ukp1[center] = 0.0f
+      uk[center] = 0.0f
 end
 
 
-terra evalUkp1(ukp1 : &float, tau : float, uk : &float, grad : &float)
+terra evalUkp1(problemData : &backend.VECDATA)
+  var ukp1 = (@problemData).ukp1_d
+  var tau = (@problemData).tau
+  var uk = (@problemData).uk_d
+  var grad = (@problemData).gradE_d
   [backend.makeloop(evalUkp1Local, {ukp1, tau, uk, grad})]
 end
+print(evalUkp1)
 
 -- TODO need to do something kernel-specific here. Maybe try to make this the
 -- spot where we wrap the serial serial kernel-code into a for-loop
@@ -102,7 +116,7 @@ terra main()
 
   -- main loop
   -- is the same for all backends (except for the kernel launch and possibly some synchronization)
-  var maxiter = 200
+  var maxiter = 100
   for iter = 1,maxiter do
 
     -- START launch
@@ -112,7 +126,8 @@ terra main()
 
     -- C.printf("\n")
     -- for k = 0,10 do
-    --   C.printf("grad: %f\n", problemData.gradE_d[k+width])
+    --   C.printf("grad: %f\n", problemData.gradE_d[k+width]) -- does not work on GPU
+    --   C.printf("iter: %d\n", iter)
     -- end
 
     var tmp : &float = problemData.uk_d
